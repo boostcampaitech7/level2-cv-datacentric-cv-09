@@ -118,14 +118,14 @@ def do_training(config):
 
         # Save checkpoint at intervals
         if (epoch + 1) % config.data.save_interval == 0:
-            ckpt_fpath = osp.join(log_dir, f"epoch_{epoch+1}.pt")
+            ckpt_fpath = osp.join(log_dir, f"epoch_{epoch+1}.pth")
             torch.save(model.state_dict(), ckpt_fpath)
 
     # save confog file
     config_file_path = args.config
     shutil.copy(config_file_path, os.path.join(log_dir, os.path.basename(config_file_path)))
 
-    latest_ckpt_fpath = osp.join(log_dir, f"latest.pt")
+    latest_ckpt_fpath = osp.join(log_dir, f"latest.pth")
     torch.save(model.state_dict(), latest_ckpt_fpath)
 
 def main(args):
