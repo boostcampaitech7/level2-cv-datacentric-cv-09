@@ -19,6 +19,7 @@ from dataset.east_dataset import EASTDataset
 from dataset.dataset import SceneTextDataset
 from model.model import EAST
 import wandb
+import shutil
 
 
 def parse_args():
@@ -38,13 +39,7 @@ def initialize_directory(config):
     log_dir = osp.join(model_dir, config.exp_name)
     if not osp.exists(log_dir):
         os.makedirs(log_dir)
-    return log_dir
-
-
-# def save_checkpoint(model, model_dir, epoch):
-#     ckpt_fpath = osp.join(model_dir, f"epoch_{epoch}.pt")
-#     torch.save(model.state_dict(), ckpt_fpath)
-    
+    return log_dir    
 
 
 def update_log(log_dir, epoch, mean_loss, elapsed_time):
@@ -121,24 +116,17 @@ def do_training(config):
         # Update log file
         update_log(log_dir, epoch, mean_loss, elapsed_time)
 
-
-        # model_dir = config.data.model_dir
-
         # Save checkpoint at intervals
         if (epoch + 1) % config.data.save_interval == 0:
-            # save_checkpoint(model, config.data.model_dir, epoch + 1)
             ckpt_fpath = osp.join(log_dir, f"epoch_{epoch+1}.pt")
             torch.save(model.state_dict(), ckpt_fpath)
 
-        
-        # if (epoch + 1) % config.data.save_interval == 0:
-        #     if not osp.exists(model_dir):
-        #         os.makedirs(model_dir)
+    # save confog file
+    config_file_path = args.config
+    shutil.copy(config_file_path, os.path.join(log_dir, os.path.basename(config_file_path)))
 
-        #     ckpt_fpath = osp.join(model_dir, config.exp_name)
-        #     torch.save(model.state_dict(), ckpt_fpath)
-            # wandb.save(ckpt_fpath)  # WandB에 체크포인트 저장
-
+    latest_ckpt_fpath = osp.join(log_dir, f"latest.pt")
+    torch.save(model.state_dict(), latest_ckpt_fpath)
 
 def main(args):
     with open(args.config, 'r') as f:
