@@ -122,12 +122,12 @@ def do_training(config):
         update_log(log_dir, epoch, mean_loss, elapsed_time)
 
 
-        model_dir = config.data.model_dir
+        # model_dir = config.data.model_dir
 
         # Save checkpoint at intervals
         if (epoch + 1) % config.data.save_interval == 0:
             # save_checkpoint(model, config.data.model_dir, epoch + 1)
-            ckpt_fpath = osp.join(model_dir, f"epoch_{epoch}.pt")
+            ckpt_fpath = osp.join(log_dir, f"epoch_{epoch+1}.pt")
             torch.save(model.state_dict(), ckpt_fpath)
 
         
