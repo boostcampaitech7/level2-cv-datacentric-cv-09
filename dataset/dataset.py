@@ -337,6 +337,28 @@ def filter_vertices(vertices, labels, ignore_under=0, drop_under=0):
 
     return new_vertices, new_labels
 
+def add_gaussian_noise(image, mean=0, std=25):
+    """Add Gaussian noise to an image
+    
+    Args:
+        image: Input image (numpy array)
+        mean: Mean of Gaussian noise
+        std: Standard deviation of Gaussian noise
+        
+    Returns:
+        Noisy image
+    """
+    # Generate Gaussian noise
+    gaussian_noise = np.random.normal(mean, std, image.shape)
+    
+    # Add noise to image
+    noisy_image = image + gaussian_noise
+    
+    # Clip the values to maintain the valid range [0, 255]
+    noisy_image = np.clip(noisy_image, 0, 255)
+    
+    return noisy_image.astype(np.float32)
+
 
 class SceneTextDataset(Dataset):
     def __init__(self, root_dir,
@@ -346,6 +368,10 @@ class SceneTextDataset(Dataset):
                  ignore_under_threshold=10,
                  drop_under_threshold=1,
                  color_jitter=True,
+                 gaussian_noise=True,
+                 gaussian_prob=0.5,
+                 gaussian_mean=0,
+                 gaussian_std=25,
                  normalize=True):
         self._lang_list = ['chinese', 'japanese', 'thai', 'vietnamese']
         self.root_dir = root_dir
@@ -363,6 +389,11 @@ class SceneTextDataset(Dataset):
         self.image_size, self.crop_size = image_size, crop_size
         self.color_jitter, self.normalize = color_jitter, normalize
 
+        self.gaussian_noise = gaussian_noise
+        self.gaussian_prob = gaussian_prob
+        self.gaussian_mean = gaussian_mean
+        self.gaussian_std = gaussian_std
+
         self.drop_under_threshold = drop_under_threshold
         self.ignore_under_threshold = ignore_under_threshold
 
@@ -379,6 +410,7 @@ class SceneTextDataset(Dataset):
         else:
             raise ValueError
         return osp.join(self.root_dir, f'{lang}_receipt', 'img', self.split)
+    
     def __len__(self):
         return len(self.image_fnames)
 
@@ -411,6 +443,12 @@ class SceneTextDataset(Dataset):
         if image.mode != 'RGB':
             image = image.convert('RGB')
         image = np.array(image)
+
+
+        # Apply Gaussian noise with probability
+        if self.gaussian_noise and np.random.random() < self.gaussian_prob:
+            image = add_gaussian_noise(image)
+
 
         funcs = []
         if self.color_jitter:
