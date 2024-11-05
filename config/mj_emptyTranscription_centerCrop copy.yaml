@@ -1,4 +1,4 @@
-exp_name: "mj_add_gaussian"
+exp_name: "mj_emptyTranscription_centerCrop"
 seed: 1024
 
 data:
@@ -8,13 +8,13 @@ data:
   model_dir: './trained_models'
   image_size: 2048
   input_size: 1024
-  save_interval: 50
+  save_interval: 100
 
 wandb:
   project_name: 'OCR_receipt'
 
 solver:
-  max_epoch: 150
+  max_epoch: 250
   lr: 0.001
 
 transform:

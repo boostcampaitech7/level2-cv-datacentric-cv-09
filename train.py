@@ -7,7 +7,7 @@ import random
 from datetime import timedelta
 from argparse import ArgumentParser
 import yaml
-from  dotmap import DotMap
+from dotmap import DotMap
 
 import torch
 from torch import cuda
@@ -19,6 +19,7 @@ from dataset.east_dataset import EASTDataset
 from dataset.dataset import SceneTextDataset
 from model.model import EAST
 import wandb
+import shutil
 
 
 def parse_args():
@@ -31,10 +32,26 @@ def parse_args():
     return args
 
 
+def initialize_directory(config):
+    model_dir = config.data.model_dir
+    if not osp.exists(model_dir):
+        os.makedirs(model_dir)
+    log_dir = osp.join(model_dir, config.exp_name)
+    if not osp.exists(log_dir):
+        os.makedirs(log_dir)
+    return log_dir    
+
+
+def update_log(log_dir, epoch, mean_loss, elapsed_time):
+    log_path = osp.join(log_dir, 'training_log.txt')
+    with open(log_path, 'a') as f:
+        f.write(f"Epoch: {epoch + 1}, Mean Loss: {mean_loss:.4f}, Elapsed Time: {elapsed_time}\n")
+
+
 def do_training(config):
-    wandb.init(project='OCR_receipt')
+    wandb.init(project=config.wandb.project_name)
     # 실행 이름 설정
-    wandb.run.name = 'baseline_250ep'
+    wandb.run.name = config.exp_name
     wandb.run.save()
     wandb_args = {
         "learning_rate": config.solver.lr,
@@ -42,6 +59,8 @@ def do_training(config):
         "batch_size": config.data.batch_size
     }
     wandb.config.update(wandb_args)
+
+    log_dir = initialize_directory(config)
 
     dataset = SceneTextDataset(
         config.data.data_dir,
@@ -89,18 +108,25 @@ def do_training(config):
 
         scheduler.step()
 
-        print('Mean loss: {:.4f} | Elapsed time: {}'.format(
-            epoch_loss / num_batches, timedelta(seconds=time.time() - epoch_start)))
-        wandb.log({"Mean loss": epoch_loss / num_batches})
+        mean_loss = epoch_loss / num_batches
+        elapsed_time = timedelta(seconds=time.time() - epoch_start)
+        print(f'Mean loss: {mean_loss:.4f} | Elapsed time: {elapsed_time}')
+        wandb.log({"Mean loss": mean_loss})
 
-        model_dir = config.data.model_dir
+        # Update log file
+        update_log(log_dir, epoch, mean_loss, elapsed_time)
+
+        # Save checkpoint at intervals
         if (epoch + 1) % config.data.save_interval == 0:
-            if not osp.exists(model_dir):
-                os.makedirs(model_dir)
-
-            ckpt_fpath = osp.join(model_dir, 'latest.pth')
+            ckpt_fpath = osp.join(log_dir, f"epoch_{epoch+1}.pth")
             torch.save(model.state_dict(), ckpt_fpath)
 
+    # save confog file
+    config_file_path = args.config
+    shutil.copy(config_file_path, os.path.join(log_dir, os.path.basename(config_file_path)))
+
+    latest_ckpt_fpath = osp.join(log_dir, f"latest.pth")
+    torch.save(model.state_dict(), latest_ckpt_fpath)
 
 def main(args):
     with open(args.config, 'r') as f:

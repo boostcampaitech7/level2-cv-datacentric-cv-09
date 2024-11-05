@@ -10,12 +10,14 @@ import albumentations as A
 from torch.utils.data import Dataset
 from shapely.geometry import Polygon
 
+from numba import njit
 
+@njit
 def cal_distance(x1, y1, x2, y2):
     '''calculate the Euclidean distance'''
     return math.sqrt((x1 - x2)**2 + (y1 - y2)**2)
 
-
+@njit
 def move_points(vertices, index1, index2, r, coef):
     '''move the two points to shrink edge
     Input:
@@ -48,7 +50,7 @@ def move_points(vertices, index1, index2, r, coef):
         vertices[y2_index] += ratio * length_y
     return vertices
 
-
+@njit
 def shrink_poly(vertices, coef=0.3):
     '''shrink the text region
     Input:
@@ -78,7 +80,7 @@ def shrink_poly(vertices, coef=0.3):
     v = move_points(v, 3 + offset, 4 + offset, r, coef)
     return v
 
-
+@njit
 def get_rotate_mat(theta):
     '''positive theta value means rotate clockwise'''
     return np.array([[math.cos(theta), -math.sin(theta)], [math.sin(theta), math.cos(theta)]])
@@ -100,7 +102,7 @@ def rotate_vertices(vertices, theta, anchor=None):
     res = np.dot(rotate_mat, v - anchor)
     return (res + anchor).T.reshape(-1)
 
-
+@njit
 def get_boundary(vertices):
     '''get the tight boundary around given vertices
     Input:
@@ -116,6 +118,7 @@ def get_boundary(vertices):
     return x_min, x_max, y_min, y_max
 
 
+@njit
 def cal_error(vertices):
     '''default orientation is x1y1 : left-top, x2y2 : right-top, x3y3 : right-bot, x4y4 : left-bot
     calculate the difference between the vertices orientation and default orientation
@@ -131,6 +134,7 @@ def cal_error(vertices):
     return err
 
 
+@njit
 def find_min_rect_angle(vertices):
     '''find the best angle to rotate poly and obtain min rectangle
     Input:
@@ -211,16 +215,35 @@ def crop_img(img, vertices, labels, length):
         new_vertices[:,[0,2,4,6]] = vertices[:,[0,2,4,6]] * ratio_w
         new_vertices[:,[1,3,5,7]] = vertices[:,[1,3,5,7]] * ratio_h
 
-    # find random position
-    remain_h = img.height - length
-    remain_w = img.width - length
-    flag = True
-    cnt = 0
-    while flag and cnt < 1000:
-        cnt += 1
-        start_w = int(np.random.rand() * remain_w)
-        start_h = int(np.random.rand() * remain_h)
-        flag = is_cross_text([start_w, start_h], length, new_vertices[labels==1,:])
+    # # find random position
+    # remain_h = img.height - length
+    # remain_w = img.width - length
+    # flag = True
+    # cnt = 0
+    # while flag and cnt < 1000:
+    #     cnt += 1
+    #     start_w = int(np.random.rand() * remain_w)
+    #     start_h = int(np.random.rand() * remain_h)
+    #     flag = is_cross_text([start_w, start_h], length, new_vertices[labels==1,:])
+    
+    # center crop
+    # Calculate center crop coordinates
+    center_h = img.height // 2
+    center_w = img.width // 2
+    start_h = center_h - (length // 2)
+    start_w = center_w - (length // 2)
+
+    # Ensure start positions are non-negative
+    start_h = max(0, start_h)
+    start_w = max(0, start_w)
+    
+    # Adjust start positions if crop would go beyond image boundaries
+    if start_h + length > img.height:
+        start_h = img.height - length
+    if start_w + length > img.width:
+        start_w = img.width - length
+
+
     box = (start_w, start_h, start_w + length, start_h + length)
     region = img.crop(box)
     if new_vertices.size == 0:
@@ -231,6 +254,7 @@ def crop_img(img, vertices, labels, length):
     return region, new_vertices
 
 
+@njit
 def rotate_all_pixels(rotate_mat, anchor_x, anchor_y, length):
     '''get rotated locations of all pixels for next stages
     Input:
@@ -332,15 +356,41 @@ def filter_vertices(vertices, labels, ignore_under=0, drop_under=0):
 
     return new_vertices, new_labels
 
+def add_gaussian_noise(image, mean=0, std=25):
+    """Add Gaussian noise to an image
+    
+    Args:
+        image: Input image (numpy array)
+        mean: Mean of Gaussian noise
+        std: Standard deviation of Gaussian noise
+        
+    Returns:
+        Noisy image
+    """
+    # Generate Gaussian noise
+    gaussian_noise = np.random.normal(mean, std, image.shape)
+    
+    # Add noise to image
+    noisy_image = image + gaussian_noise
+    
+    # Clip the values to maintain the valid range [0, 255]
+    noisy_image = np.clip(noisy_image, 0, 255)
+    
+    return noisy_image.astype(np.float32)
+
 
 class SceneTextDataset(Dataset):
     def __init__(self, root_dir,
                  split='train',
                  image_size=2048,
-                 crop_size=1024,
+                 crop_size=960,
                  ignore_under_threshold=10,
                  drop_under_threshold=1,
                  color_jitter=True,
+                #  gaussian_noise=True,
+                #  gaussian_prob=0.5,
+                #  gaussian_mean=0,
+                #  gaussian_std=25,
                  normalize=True):
         self._lang_list = ['chinese', 'japanese', 'thai', 'vietnamese']
         self.root_dir = root_dir
@@ -358,6 +408,11 @@ class SceneTextDataset(Dataset):
         self.image_size, self.crop_size = image_size, crop_size
         self.color_jitter, self.normalize = color_jitter, normalize
 
+        # self.gaussian_noise = gaussian_noise
+        # self.gaussian_prob = gaussian_prob
+        # self.gaussian_mean = gaussian_mean
+        # self.gaussian_std = gaussian_std
+
         self.drop_under_threshold = drop_under_threshold
         self.ignore_under_threshold = ignore_under_threshold
 
@@ -374,6 +429,7 @@ class SceneTextDataset(Dataset):
         else:
             raise ValueError
         return osp.join(self.root_dir, f'{lang}_receipt', 'img', self.split)
+    
     def __len__(self):
         return len(self.image_fnames)
 
@@ -383,12 +439,21 @@ class SceneTextDataset(Dataset):
 
         vertices, labels = [], []
         for word_info in self.anno['images'][image_fname]['words'].values():
+            # Skip if transcription is empty
+            if not word_info.get('transcription', ''):
+                continue
+
             num_pts = np.array(word_info['points']).shape[0]
             if num_pts > 4:
                 continue
             vertices.append(np.array(word_info['points']).flatten())
             labels.append(1)
         vertices, labels = np.array(vertices, dtype=np.float32), np.array(labels, dtype=np.int64)
+
+        # If no valid vertices found (all transcriptions were empty), skip this image
+        if len(vertices) == 0:
+            # Recursively get next valid image
+            return self.__getitem__((idx + 1) % len(self))
 
         vertices, labels = filter_vertices(
             vertices,
@@ -406,6 +471,12 @@ class SceneTextDataset(Dataset):
         if image.mode != 'RGB':
             image = image.convert('RGB')
         image = np.array(image)
+
+
+        # # Apply Gaussian noise with probability
+        # if self.gaussian_noise and np.random.random() < self.gaussian_prob:
+        #     image = add_gaussian_noise(image)
+
 
         funcs = []
         if self.color_jitter:
