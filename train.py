@@ -15,9 +15,9 @@ from torch.utils.data import DataLoader
 from torch.optim import lr_scheduler
 from tqdm import tqdm
 
-from east_dataset import EASTDataset
-from dataset import SceneTextDataset
-from model import EAST
+from dataset.east_dataset import EASTDataset
+from dataset.dataset import SceneTextDataset
+from model.model import EAST
 import wandb
 import shutil
     
