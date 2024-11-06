@@ -439,13 +439,16 @@ class SceneTextDataset(Dataset):
 
         vertices, labels = [], []
         for word_info in self.anno['images'][image_fname]['words'].values():
-            # Skip if transcription is empty
-            if not word_info.get('transcription', ''):
+            # Skip if transcription is empty or contains ***
+            transcription = word_info.get('transcription', '')
+            skip_patterns = ['....', '***', '---', '===']
+            if not transcription or any(pattern in transcription for pattern in skip_patterns):
                 continue
 
             num_pts = np.array(word_info['points']).shape[0]
             if num_pts > 4:
                 continue
+            
             vertices.append(np.array(word_info['points']).flatten())
             labels.append(1)
         vertices, labels = np.array(vertices, dtype=np.float32), np.array(labels, dtype=np.int64)
