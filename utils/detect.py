@@ -11,7 +11,8 @@ from dataset.dataset import get_rotate_mat
 MAX_BOX_PREDICTIONS = 1000
 
 
-def print_warning(num_boxes): # 모델이 예측한 bounding box의 개수가 너무 많으면 경고
+def print_warning(num_boxes):
+
     warnings.warn(
         f"Found {num_boxes} boxes. Only {MAX_BOX_PREDICTIONS} boxes will be kept. "
         "Model trained with insufficient epochs could largely increase "
@@ -19,7 +20,8 @@ def print_warning(num_boxes): # 모델이 예측한 bounding box의 개수가 �
         stacklevel=2)
 
 
-def is_valid_poly(res, score_shape, scale): # 예측된 polygon 좌표가 이미지 내에 올바르게 위치하는지 확인
+def is_valid_poly(res, score_shape, scale):
+
     '''check if the poly in image scope
     Input:
         res        : restored poly in original image
@@ -36,7 +38,8 @@ def is_valid_poly(res, score_shape, scale): # 예측된 polygon 좌표가 이미
     return cnt <= 1
 
 
-def restore_polys(valid_pos, valid_geo, score_shape, scale=2): # 예측된 위치와 geometry를 바탕으로 원본 이미지 상에서 텍스트 영역의 polygon 좌표를 복원
+def restore_polys(valid_pos, valid_geo, score_shape, scale=2):
+
     '''restore polys from feature maps in given positions
     Input:
         valid_pos  : potential text positions <numpy.ndarray, (n,2)>
@@ -75,7 +78,8 @@ def restore_polys(valid_pos, valid_geo, score_shape, scale=2): # 예측된 위�
     return np.array(polys), index
 
 
-def get_bboxes(score, geo, score_thresh=0.9, nms_thresh=0.2): # EAST 모델이 예측한 score map과 geometry map을 이용해 최종 bounding box를 생성하는 역할
+def get_bboxes(score, geo, score_thresh=0.9, nms_thresh=0.2):
+
     '''get boxes from feature map
     Input:
         score       : score map from model <numpy.ndarray, (1,row,col)>

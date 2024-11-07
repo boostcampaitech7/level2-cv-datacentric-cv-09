@@ -20,7 +20,7 @@ from dataset.dataset import SceneTextDataset
 from model.model import EAST
 import wandb
 import shutil
-    
+
 import cv2
 
 def visualize_images_with_bboxes(dataset, num_images=30, save_path='/data/ephemeral/home/ES-datacentric-cv-09/code/data/augmented_samples.jpg'):
@@ -78,6 +78,7 @@ def parse_args():
     args = parser.parse_args()
     return args
 
+
 def initialize_directory(config):
     model_dir = config.data.model_dir
     if not osp.exists(model_dir):
@@ -87,6 +88,7 @@ def initialize_directory(config):
         os.makedirs(log_dir)
     return log_dir    
 
+  
 def update_log(log_dir, epoch, mean_loss, elapsed_time):
     log_path = osp.join(log_dir, 'training_log.txt')
     with open(log_path, 'a') as f:
@@ -113,7 +115,7 @@ def do_training(config):
         image_size=config.data.image_size,
         crop_size=config.data.input_size,
     )
-    
+
     # 시각화 및 저장 함수 실행
     visualize_images_with_bboxes(dataset, num_images=30)
     
@@ -198,3 +200,4 @@ def main(args):
 if __name__ == '__main__':
     args = parse_args()
     main(args)
+

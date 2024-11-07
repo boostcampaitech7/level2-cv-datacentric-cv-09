@@ -125,7 +125,7 @@ class Merge(nn.Module):
                 nn.init.constant_(m.bias, 0)
 
     def forward(self, x):
-        y = F.interpolate(x[4], scale_factor=2, mode='bilinear', align_corners=True) # bilinear interpolate
+        y = F.interpolate(x[4], scale_factor=2, mode='bilinear', align_corners=True)
         y = torch.cat((y, x[3]), 1)
         y = self.relu1(self.bn1(self.conv1(y)))
         y = self.relu2(self.bn2(self.conv2(y)))
@@ -153,11 +153,13 @@ class Merge(nn.Module):
 class Output(nn.Module):
     def __init__(self, scope=512):
         super().__init__()
-        self.conv1 = nn.Conv2d(32, 1, 1) # score map 생성을 위한 1x1 컨볼루션
+
+        self.conv1 = nn.Conv2d(32, 1, 1)
         self.sigmoid1 = nn.Sigmoid()
-        self.conv2 = nn.Conv2d(32, 4, 1) # 각 픽셀 당 box의 거리 정보를 생성
+        self.conv2 = nn.Conv2d(32, 4, 1)
         self.sigmoid2 = nn.Sigmoid()
-        self.conv3 = nn.Conv2d(32, 1, 1) # 회전 각도를 위한 1x1 컨볼루션
+        self.conv3 = nn.Conv2d(32, 1, 1)
+
         self.sigmoid3 = nn.Sigmoid()
         self.scope = 512
         for m in self.modules():
@@ -169,7 +171,7 @@ class Output(nn.Module):
     def forward(self, x):
         score = self.sigmoid1(self.conv1(x))
         loc   = self.sigmoid2(self.conv2(x)) * self.scope
-        angle = (self.sigmoid3(self.conv3(x)) - 0.5) * math.pi # [-π/2, π/2] 각도 만들기
+        angle = (self.sigmoid3(self.conv3(x)) - 0.5) * math.pi
         geo   = torch.cat((loc, angle), 1)
         return score, geo
 
