@@ -466,16 +466,6 @@ class SceneTextDataset(Dataset):
 
         vertices, labels = [], []
         for word_info in self.anno['images'][image_fname]['words'].values():
-            
-            # Skip if transcription is empty or contains unwanted characters
-            transcription = word_info.get('transcription', '')
-
-            # 불필요한 문자 리스트 정의
-            unwanted_chars = ["/", "+", "%", "@", ">", "<", ".", ",", ";", ":", "-", "*", "#", "!", "&", "(", ")", "=", "["]
-
-            if not transcription or transcription in unwanted_chars:
-                continue
-                
             num_pts = np.array(word_info['points']).shape[0]
             if num_pts > 4:
                 continue
