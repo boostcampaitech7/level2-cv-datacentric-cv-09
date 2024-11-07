@@ -153,11 +153,13 @@ class Merge(nn.Module):
 class Output(nn.Module):
     def __init__(self, scope=512):
         super().__init__()
+
         self.conv1 = nn.Conv2d(32, 1, 1)
         self.sigmoid1 = nn.Sigmoid()
         self.conv2 = nn.Conv2d(32, 4, 1)
         self.sigmoid2 = nn.Sigmoid()
         self.conv3 = nn.Conv2d(32, 1, 1)
+
         self.sigmoid3 = nn.Sigmoid()
         self.scope = 512
         for m in self.modules():

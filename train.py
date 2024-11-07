@@ -21,7 +21,54 @@ from model.model import EAST
 import wandb
 import shutil
 
+import cv2
 
+def visualize_images_with_bboxes(dataset, num_images=30, save_path='/data/ephemeral/home/ES-datacentric-cv-09/code/data/augmented_samples.jpg'):
+    # 시각화할 이미지 수 제한
+    num_images = min(num_images, len(dataset))
+    
+    # 각 이미지에 대한 설정
+    images = []
+    
+    for i in range(num_images):
+        image, word_bboxes, roi_mask = dataset[i]  # 데이터셋에서 이미지 가져오기
+        
+        # 텐서 이미지(배치 크기 포함)를 Numpy 배열로 변환하여 HWC 형태로 바꾸기
+        if isinstance(image, torch.Tensor):
+            image = image.permute(1, 2, 0).cpu().numpy()  # C, H, W -> H, W, C
+
+        # 이미지 정규화 해제 및 값 범위 조정
+        if image.dtype == np.float32 or image.dtype == np.float64:
+            image = (image - image.min()) / (image.max() - image.min())
+            image = (image * 255).astype(np.uint8)
+
+        # 이미지 복사본을 생성하여 Bounding boxes를 이미지에 그리기
+        image_with_bboxes = image.copy()
+
+        # Bounding boxes를 이미지에 그리기
+        for bbox in word_bboxes:
+            pts = np.array(bbox, np.int32).reshape((-1, 1, 2))
+            image_with_bboxes = cv2.polylines(image_with_bboxes, [pts], isClosed=True, color=(0, 255, 0), thickness=2)
+        
+        images.append(cv2.cvtColor(image_with_bboxes, cv2.COLOR_BGR2RGB))  # BGR -> RGB로 변환 후 리스트에 추가
+    
+    # 그리드 형태로 이미지 저장
+    grid_size = int(np.ceil(np.sqrt(num_images)))  # 그리드 크기 계산
+
+    # 각 이미지의 크기 가져오기
+    h, w, _ = images[0].shape  # 첫 번째 이미지 크기로 설정
+
+    combined_image = np.zeros((grid_size * h, grid_size * w, 3), dtype=np.uint8)  # 이미지 크기로 결합된 이미지 생성
+
+    for idx, img in enumerate(images):
+        row = idx // grid_size
+        col = idx % grid_size
+        combined_image[row * h:(row + 1) * h, col * w:(col + 1) * w] = img
+    
+    # 이미지를 저장
+    cv2.imwrite(save_path, cv2.cvtColor(combined_image, cv2.COLOR_RGB2BGR))  # RGB -> BGR로 변환하여 저장
+    print("save_path:", save_path)
+    
 def parse_args():
     parser = ArgumentParser()
 
@@ -41,7 +88,7 @@ def initialize_directory(config):
         os.makedirs(log_dir)
     return log_dir    
 
-
+  
 def update_log(log_dir, epoch, mean_loss, elapsed_time):
     log_path = osp.join(log_dir, 'training_log.txt')
     with open(log_path, 'a') as f:
@@ -68,6 +115,10 @@ def do_training(config):
         image_size=config.data.image_size,
         crop_size=config.data.input_size,
     )
+
+    # 시각화 및 저장 함수 실행
+    visualize_images_with_bboxes(dataset, num_images=30)
+    
     dataset = EASTDataset(dataset)
     num_batches = math.ceil(len(dataset) / config.data.batch_size)
     train_loader = DataLoader(
@@ -149,3 +200,4 @@ def main(args):
 if __name__ == '__main__':
     args = parse_args()
     main(args)
+

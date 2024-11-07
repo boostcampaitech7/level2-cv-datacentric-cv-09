@@ -9,7 +9,7 @@ import cv2
 import albumentations as A
 from torch.utils.data import Dataset
 from shapely.geometry import Polygon
-
+from PIL import ImageDraw
 from numba import njit
 
 @njit
@@ -117,7 +117,6 @@ def get_boundary(vertices):
     y_max = max(y1, y2, y3, y4)
     return x_min, x_max, y_min, y_max
 
-
 @njit
 def cal_error(vertices):
     '''default orientation is x1y1 : left-top, x2y2 : right-top, x3y3 : right-bot, x4y4 : left-bot
@@ -133,7 +132,7 @@ def cal_error(vertices):
           cal_distance(x3, y3, x_max, y_max) + cal_distance(x4, y4, x_min, y_max)
     return err
 
-
+  
 @njit
 def find_min_rect_angle(vertices):
     '''find the best angle to rotate poly and obtain min rectangle
@@ -215,33 +214,45 @@ def crop_img(img, vertices, labels, length):
         new_vertices[:,[0,2,4,6]] = vertices[:,[0,2,4,6]] * ratio_w
         new_vertices[:,[1,3,5,7]] = vertices[:,[1,3,5,7]] * ratio_h
 
-    # # find random position
-    # remain_h = img.height - length
-    # remain_w = img.width - length
-    # flag = True
-    # cnt = 0
-    # while flag and cnt < 1000:
-    #     cnt += 1
-    #     start_w = int(np.random.rand() * remain_w)
-    #     start_h = int(np.random.rand() * remain_h)
-    #     flag = is_cross_text([start_w, start_h], length, new_vertices[labels==1,:])
-    
-    # center crop
-    # Calculate center crop coordinates
-    center_h = img.height // 2
-    center_w = img.width // 2
-    start_h = center_h - (length // 2)
-    start_w = center_w - (length // 2)
 
-    # Ensure start positions are non-negative
-    start_h = max(0, start_h)
-    start_w = max(0, start_w)
+    # find random position
+    remain_h = img.height - length
+    remain_w = img.width - length
+    flag = True
+    cnt = 0
+    while flag and cnt < 1000:
+        cnt += 1
+        start_w = int(np.random.rand() * remain_w)
+        start_h = int(np.random.rand() * remain_h)
+        flag = is_cross_text([start_w, start_h], length, new_vertices[labels==1,:])
+
+#     # # find random position
+#     # remain_h = img.height - length
+#     # remain_w = img.width - length
+#     # flag = True
+#     # cnt = 0
+#     # while flag and cnt < 1000:
+#     #     cnt += 1
+#     #     start_w = int(np.random.rand() * remain_w)
+#     #     start_h = int(np.random.rand() * remain_h)
+#     #     flag = is_cross_text([start_w, start_h], length, new_vertices[labels==1,:])
     
-    # Adjust start positions if crop would go beyond image boundaries
-    if start_h + length > img.height:
-        start_h = img.height - length
-    if start_w + length > img.width:
-        start_w = img.width - length
+#     # center crop
+#     # Calculate center crop coordinates
+#     center_h = img.height // 2
+#     center_w = img.width // 2
+#     start_h = center_h - (length // 2)
+#     start_w = center_w - (length // 2)
+
+#     # Ensure start positions are non-negative
+#     start_h = max(0, start_h)
+#     start_w = max(0, start_w)
+    
+#     # Adjust start positions if crop would go beyond image boundaries
+#     if start_h + length > img.height:
+#         start_h = img.height - length
+#     if start_w + length > img.width:
+#         start_w = img.width - length
 
 
     box = (start_w, start_h, start_w + length, start_h + length)
@@ -252,6 +263,80 @@ def crop_img(img, vertices, labels, length):
     new_vertices[:,[0,2,4,6]] -= start_w
     new_vertices[:,[1,3,5,7]] -= start_h
     return region, new_vertices
+
+
+def crop_img_masking(img, vertices, labels, length):
+
+    h, w = img.height, img.width
+    # confirm the shortest side of image >= length
+    if h >= w and w < length:
+        img = img.resize((length, int(h * length / w)), Image.BILINEAR)
+    elif h < w and h < length:
+        img = img.resize((int(w * length / h), length), Image.BILINEAR)
+
+    ratio_w = img.width / w
+    ratio_h = img.height / h
+    assert(ratio_w >= 1 and ratio_h >= 1)
+
+    new_vertices = np.zeros(vertices.shape)
+    if vertices.size > 0:
+        new_vertices[:, [0, 2, 4, 6]] = vertices[:, [0, 2, 4, 6]] * ratio_w
+        new_vertices[:, [1, 3, 5, 7]] = vertices[:, [1, 3, 5, 7]] * ratio_h
+
+    # find random position
+    remain_h = img.height - length
+    remain_w = img.width - length
+    flag = True
+    cnt = 0
+    while flag and cnt < 1000:
+        cnt += 1
+        start_w = int(np.random.rand() * remain_w)
+        start_h = int(np.random.rand() * remain_h)
+        flag = is_cross_text([start_w, start_h], length, new_vertices[labels == 1, :])
+
+    box = (start_w, start_h, start_w + length, start_h + length)
+    region = img.crop(box)
+
+    # 마스킹을 위한 준비
+    mask = Image.new('L', (length, length), 255)  # 흰색 마스크 생성
+    draw = ImageDraw.Draw(mask)
+
+    filtered_vertices = []
+    for idx in range(len(labels)):
+        if labels[idx] == 1:  # 유효한 박스만 확인
+            box_coords = new_vertices[idx].reshape(-1, 2)
+            # crop 영역 내에 완전히 포함되는지 확인
+            if np.all((box_coords[:, 0] >= start_w) & (box_coords[:, 0] <= start_w + length) &
+                       (box_coords[:, 1] >= start_h) & (box_coords[:, 1] <= start_h + length)):
+                filtered_vertices.append(new_vertices[idx])
+            else:
+                # crop 영역에 완전히 포함되지 않는 경우 마스킹
+                polygon_coords = [(x - start_w, y - start_h) for x, y in box_coords]
+                draw.polygon(polygon_coords, fill=0)  # 검은색으로 마스킹
+
+    # 마스크 적용
+    region_np = np.array(region)
+    mask_np = np.array(mask)
+    
+    if len(region_np.shape) == 2:  # 그레이스케일 이미지라면
+        region_np = np.stack([region_np] * 3, axis=-1)  # RGB 3채널로 변환
+
+    # mask_np의 차원 맞추기
+    mask_np = mask_np[:, :, np.newaxis]  # (length, length) -> (length, length, 1)
+    
+    # masked_region 생성
+    masked_region = np.where(mask_np == 0, 255, region_np)  # (length, length, 3)에서 masking 적용
+
+    # PIL Image로 변환
+    masked_region = Image.fromarray(masked_region.astype(np.uint8))
+
+    if len(filtered_vertices) == 0:
+        return masked_region, np.empty((0, 8))
+
+    new_vertices = np.array(filtered_vertices)
+    new_vertices[:, [0, 2, 4, 6]] -= start_w
+    new_vertices[:, [1, 3, 5, 7]] -= start_h
+    return masked_region, new_vertices
 
 
 @njit
@@ -356,6 +441,7 @@ def filter_vertices(vertices, labels, ignore_under=0, drop_under=0):
 
     return new_vertices, new_labels
 
+  
 def add_gaussian_noise(image, mean=0, std=25):
     """Add Gaussian noise to an image
     
@@ -408,6 +494,7 @@ class SceneTextDataset(Dataset):
         self.image_size, self.crop_size = image_size, crop_size
         self.color_jitter, self.normalize = color_jitter, normalize
 
+
         # self.gaussian_noise = gaussian_noise
         # self.gaussian_prob = gaussian_prob
         # self.gaussian_mean = gaussian_mean
@@ -429,7 +516,7 @@ class SceneTextDataset(Dataset):
         else:
             raise ValueError
         return osp.join(self.root_dir, f'{lang}_receipt', 'img', self.split)
-    
+
     def __len__(self):
         return len(self.image_fnames)
 
@@ -439,6 +526,7 @@ class SceneTextDataset(Dataset):
 
         vertices, labels = [], []
         for word_info in self.anno['images'][image_fname]['words'].values():
+
             # Skip if transcription is empty
             if not word_info.get('transcription', ''):
                 continue
@@ -466,17 +554,17 @@ class SceneTextDataset(Dataset):
         image, vertices = resize_img(image, vertices, self.image_size)
         image, vertices = adjust_height(image, vertices)
         image, vertices = rotate_img(image, vertices)
-        image, vertices = crop_img(image, vertices, labels, self.crop_size)
+        image, vertices = crop_img_masking(image, vertices, labels, self.crop_size)
+#       image, vertices = crop_img(image, vertices, labels, self.crop_size)
+
 
         if image.mode != 'RGB':
             image = image.convert('RGB')
         image = np.array(image)
 
-
         # # Apply Gaussian noise with probability
         # if self.gaussian_noise and np.random.random() < self.gaussian_prob:
         #     image = add_gaussian_noise(image)
-
 
         funcs = []
         if self.color_jitter:

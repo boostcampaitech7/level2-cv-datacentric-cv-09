@@ -12,6 +12,7 @@ MAX_BOX_PREDICTIONS = 1000
 
 
 def print_warning(num_boxes):
+
     warnings.warn(
         f"Found {num_boxes} boxes. Only {MAX_BOX_PREDICTIONS} boxes will be kept. "
         "Model trained with insufficient epochs could largely increase "
@@ -20,6 +21,7 @@ def print_warning(num_boxes):
 
 
 def is_valid_poly(res, score_shape, scale):
+
     '''check if the poly in image scope
     Input:
         res        : restored poly in original image
@@ -37,6 +39,7 @@ def is_valid_poly(res, score_shape, scale):
 
 
 def restore_polys(valid_pos, valid_geo, score_shape, scale=2):
+
     '''restore polys from feature maps in given positions
     Input:
         valid_pos  : potential text positions <numpy.ndarray, (n,2)>
@@ -76,6 +79,7 @@ def restore_polys(valid_pos, valid_geo, score_shape, scale=2):
 
 
 def get_bboxes(score, geo, score_thresh=0.9, nms_thresh=0.2):
+
     '''get boxes from feature map
     Input:
         score       : score map from model <numpy.ndarray, (1,row,col)>
