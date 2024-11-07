@@ -12,6 +12,8 @@ from shapely.geometry import Polygon
 from PIL import ImageDraw
 from numba import njit
 
+import random
+
 @njit
 def cal_distance(x1, y1, x2, y2):
     '''calculate the Euclidean distance'''
@@ -226,33 +228,33 @@ def crop_img(img, vertices, labels, length):
         start_h = int(np.random.rand() * remain_h)
         flag = is_cross_text([start_w, start_h], length, new_vertices[labels==1,:])
 
-#     # # find random position
-#     # remain_h = img.height - length
-#     # remain_w = img.width - length
-#     # flag = True
-#     # cnt = 0
-#     # while flag and cnt < 1000:
-#     #     cnt += 1
-#     #     start_w = int(np.random.rand() * remain_w)
-#     #     start_h = int(np.random.rand() * remain_h)
-#     #     flag = is_cross_text([start_w, start_h], length, new_vertices[labels==1,:])
+     # # find random position
+     # remain_h = img.height - length
+     # remain_w = img.width - length
+     # flag = True
+     # cnt = 0
+     # while flag and cnt < 1000:
+     #     cnt += 1
+     #     start_w = int(np.random.rand() * remain_w)
+     #     start_h = int(np.random.rand() * remain_h)
+     #     flag = is_cross_text([start_w, start_h], length, new_vertices[labels==1,:])
     
-#     # center crop
-#     # Calculate center crop coordinates
-#     center_h = img.height // 2
-#     center_w = img.width // 2
-#     start_h = center_h - (length // 2)
-#     start_w = center_w - (length // 2)
+    # center crop
+    # Calculate center crop coordinates
+    center_h = img.height // 2
+    center_w = img.width // 2
+    start_h = center_h - (length // 2)
+    start_w = center_w - (length // 2)
 
-#     # Ensure start positions are non-negative
-#     start_h = max(0, start_h)
-#     start_w = max(0, start_w)
+    # Ensure start positions are non-negative
+    start_h = max(0, start_h)
+    start_w = max(0, start_w)
     
-#     # Adjust start positions if crop would go beyond image boundaries
-#     if start_h + length > img.height:
-#         start_h = img.height - length
-#     if start_w + length > img.width:
-#         start_w = img.width - length
+    # Adjust start positions if crop would go beyond image boundaries
+    if start_h + length > img.height:
+        start_h = img.height - length
+    if start_w + length > img.width:
+        start_w = img.width - length
 
 
     box = (start_w, start_h, start_w + length, start_h + length)
@@ -464,6 +466,46 @@ def add_gaussian_noise(image, mean=0, std=25):
     
     return noisy_image.astype(np.float32)
 
+def random_crop_img(img, vertices, crop_size, padding_value=0):
+    '''랜덤 위치에서 이미지를 크롭하는 함수'''
+    img_w, img_h = img.width, img.height
+    crop_w, crop_h = crop_size, crop_size
+
+    # 크롭할 수 있는 최소 위치 계산
+    max_x = img_w - crop_w
+    max_y = img_h - crop_h
+
+    # 이미지 크기보다 크롭 크기가 크면 패딩 처리
+    if max_x < 0 or max_y < 0:
+        # 이미지 크기가 크롭 크기보다 작은 경우, 패딩을 추가하여 크기 맞추기
+        new_w = max(crop_w, img_w)
+        new_h = max(crop_h, img_h)
+        
+        # 패딩을 적용하여 이미지 크기를 맞춤
+        padded_img = Image.new('RGB', (new_w, new_h), padding_value)  # RGB로 패딩된 이미지 생성
+        padded_img.paste(img, (0, 0))  # 원본 이미지를 좌상단에 배치
+        
+        # 새로운 이미지 크기와 크롭 영역을 업데이트
+        img = padded_img
+        img_w, img_h = img.size  # 패딩된 이미지의 새로운 크기
+        max_x = img_w - crop_w
+        max_y = img_h - crop_h
+
+    # 랜덤한 시작 위치 계산
+    start_x = random.randint(0, max_x)
+    start_y = random.randint(0, max_y)
+
+    # 이미지 크롭
+    box = (start_x, start_y, start_x + crop_w, start_y + crop_h)
+    region = img.crop(box)
+
+    # 텍스트 영역도 랜덤 크롭에 맞게 변환
+    new_vertices = np.zeros(vertices.shape)
+    new_vertices[:, [0, 2, 4, 6]] = vertices[:, [0, 2, 4, 6]] - start_x
+    new_vertices[:, [1, 3, 5, 7]] = vertices[:, [1, 3, 5, 7]] - start_y
+
+    return region, new_vertices
+
 
 class SceneTextDataset(Dataset):
     def __init__(self, root_dir,
@@ -477,6 +519,7 @@ class SceneTextDataset(Dataset):
                 #  gaussian_prob=0.5,
                 #  gaussian_mean=0,
                 #  gaussian_std=25,
+                 random_crop_prob=0.5,  # n% 확률로 random crop 적용
                  normalize=True):
         self._lang_list = ['chinese', 'japanese', 'thai', 'vietnamese']
         self.root_dir = root_dir
@@ -499,6 +542,8 @@ class SceneTextDataset(Dataset):
         # self.gaussian_prob = gaussian_prob
         # self.gaussian_mean = gaussian_mean
         # self.gaussian_std = gaussian_std
+
+        self.random_crop_prob = random_crop_prob
 
         self.drop_under_threshold = drop_under_threshold
         self.ignore_under_threshold = ignore_under_threshold
@@ -557,7 +602,17 @@ class SceneTextDataset(Dataset):
         image, vertices = adjust_height(image, vertices)
         image, vertices = rotate_img(image, vertices)
         image, vertices = crop_img_masking(image, vertices, labels, self.crop_size)
-#       image, vertices = crop_img(image, vertices, labels, self.crop_size)
+
+        # # center crop만 적용
+        # image, vertices = crop_img(image, vertices, labels, self.crop_size)
+
+        # 확률적으로 Random Crop, center crop을 적용
+        if random.random() < self.random_crop_prob:
+            # Apply random crop
+            image, vertices = random_crop_img(image, vertices, self.crop_size)
+        else:
+            # Apply center crop
+            image, vertices = crop_img(image, vertices, labels, self.crop_size)
 
 
         if image.mode != 'RGB':
@@ -570,7 +625,9 @@ class SceneTextDataset(Dataset):
 
         funcs = []
         if self.color_jitter:
-            funcs.append(A.ColorJitter())
+            funcs.append(
+                A.RandomBrightnessContrast((0.3,0.5),(-0.3,0.2)),
+                         )
         if self.normalize:
             funcs.append(A.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
         transform = A.Compose(funcs)
