@@ -187,52 +187,52 @@ def is_cross_text(start_loc, length, vertices):
     return False
 
 
-# def crop_img(img, vertices, labels, length):
-#     '''crop img patches to obtain batch and augment
-#     Input:
-#         img         : PIL Image
-#         vertices    : vertices of text regions <numpy.ndarray, (n,8)>
-#         labels      : 1->valid, 0->ignore, <numpy.ndarray, (n,)>
-#         length      : length of cropped image region
-#     Output:
-#         region      : cropped image region
-#         new_vertices: new vertices in cropped region
-#     '''
-#     h, w = img.height, img.width
-#     # confirm the shortest side of image >= length
-#     if h >= w and w < length:
-#         img = img.resize((length, int(h * length / w)), Image.BILINEAR)
-#     elif h < w and h < length:
-#         img = img.resize((int(w * length / h), length), Image.BILINEAR)
-#     ratio_w = img.width / w
-#     ratio_h = img.height / h
-#     assert(ratio_w >= 1 and ratio_h >= 1)
-
-#     new_vertices = np.zeros(vertices.shape)
-#     if vertices.size > 0:
-#         new_vertices[:,[0,2,4,6]] = vertices[:,[0,2,4,6]] * ratio_w
-#         new_vertices[:,[1,3,5,7]] = vertices[:,[1,3,5,7]] * ratio_h
-
-#     # find random position
-#     remain_h = img.height - length
-#     remain_w = img.width - length
-#     flag = True
-#     cnt = 0
-#     while flag and cnt < 1000:
-#         cnt += 1
-#         start_w = int(np.random.rand() * remain_w)
-#         start_h = int(np.random.rand() * remain_h)
-#         flag = is_cross_text([start_w, start_h], length, new_vertices[labels==1,:])
-#     box = (start_w, start_h, start_w + length, start_h + length)
-#     region = img.crop(box)
-#     if new_vertices.size == 0:
-#         return region, new_vertices
-
-#     new_vertices[:,[0,2,4,6]] -= start_w
-#     new_vertices[:,[1,3,5,7]] -= start_h
-#     return region, new_vertices
-
 def crop_img(img, vertices, labels, length):
+    '''crop img patches to obtain batch and augment
+    Input:
+        img         : PIL Image
+        vertices    : vertices of text regions <numpy.ndarray, (n,8)>
+        labels      : 1->valid, 0->ignore, <numpy.ndarray, (n,)>
+        length      : length of cropped image region
+    Output:
+        region      : cropped image region
+        new_vertices: new vertices in cropped region
+    '''
+    h, w = img.height, img.width
+    # confirm the shortest side of image >= length
+    if h >= w and w < length:
+        img = img.resize((length, int(h * length / w)), Image.BILINEAR)
+    elif h < w and h < length:
+        img = img.resize((int(w * length / h), length), Image.BILINEAR)
+    ratio_w = img.width / w
+    ratio_h = img.height / h
+    assert(ratio_w >= 1 and ratio_h >= 1)
+
+    new_vertices = np.zeros(vertices.shape)
+    if vertices.size > 0:
+        new_vertices[:,[0,2,4,6]] = vertices[:,[0,2,4,6]] * ratio_w
+        new_vertices[:,[1,3,5,7]] = vertices[:,[1,3,5,7]] * ratio_h
+
+    # find random position
+    remain_h = img.height - length
+    remain_w = img.width - length
+    flag = True
+    cnt = 0
+    while flag and cnt < 1000:
+        cnt += 1
+        start_w = int(np.random.rand() * remain_w)
+        start_h = int(np.random.rand() * remain_h)
+        flag = is_cross_text([start_w, start_h], length, new_vertices[labels==1,:])
+    box = (start_w, start_h, start_w + length, start_h + length)
+    region = img.crop(box)
+    if new_vertices.size == 0:
+        return region, new_vertices
+
+    new_vertices[:,[0,2,4,6]] -= start_w
+    new_vertices[:,[1,3,5,7]] -= start_h
+    return region, new_vertices
+
+def crop_img_masking(img, vertices, labels, length):
 
     h, w = img.height, img.width
     # confirm the shortest side of image >= length
@@ -484,7 +484,7 @@ class SceneTextDataset(Dataset):
         image, vertices = resize_img(image, vertices, self.image_size)
         image, vertices = adjust_height(image, vertices)
         image, vertices = rotate_img(image, vertices)
-        image, vertices = crop_img(image, vertices, labels, self.crop_size)
+        image, vertices = crop_img_masking(image, vertices, labels, self.crop_size)
 
         if image.mode != 'RGB':
             image = image.convert('RGB')
