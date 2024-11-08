@@ -1,7 +1,7 @@
 import os.path as osp
 import math
 import json
-from PIL import Image
+from PIL import Image, ImageOps
 
 import torch
 import numpy as np
@@ -537,7 +537,6 @@ class SceneTextDataset(Dataset):
         self.image_size, self.crop_size = image_size, crop_size
         self.color_jitter, self.normalize = color_jitter, normalize
 
-
         # self.gaussian_noise = gaussian_noise
         # self.gaussian_prob = gaussian_prob
         # self.gaussian_mean = gaussian_mean
@@ -598,6 +597,7 @@ class SceneTextDataset(Dataset):
         )
 
         image = Image.open(image_fpath)
+        image = ImageOps.exif_transpose(image)
         image, vertices = resize_img(image, vertices, self.image_size)
         image, vertices = adjust_height(image, vertices)
         image, vertices = rotate_img(image, vertices)
