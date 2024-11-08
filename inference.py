@@ -37,6 +37,7 @@ def parse_args():
     parser.add_argument('--device', default='cuda' if cuda.is_available() else 'cpu')
     parser.add_argument('--input_size', type=int, default=2048)
     parser.add_argument('--batch_size', type=int, default=5)
+    parser.add_argument('--split', type=str, default='test')
 
     args = parser.parse_args()
 
@@ -89,7 +90,7 @@ def main(args):
 
     ufo_result = dict(images=dict())
     split_result = do_inference(model, ckpt_fpath, args.data_dir, args.input_size,
-                                args.batch_size, split='test')
+                                args.batch_size, split=args.split)
     ufo_result['images'].update(split_result['images'])
 
     output_fname = config['exp_name'] + '.csv'
